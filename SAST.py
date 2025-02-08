@@ -5,7 +5,8 @@ import time
 import json
 import stat
 import pefile
-import peutils
+import yara
+
 
 def get_file_time(file_path):
     """
@@ -41,6 +42,7 @@ def get_file_time(file_path):
 
     # 返回文件的创建时间、修改时间、访问时间
     return create_time_str, modify_time_str, access_time_str
+
 
 def get_file_hash(file_path):
     """
@@ -81,9 +83,10 @@ def get_file_hash(file_path):
     # 返回十六进制的哈希值
     return md5_hash, sha1_hash, sha256_hash
 
+
 def get_file_permissions(file_path):
     """
-       函数功能：输出文件的散列值，输入file_path，返回read_permission, write_permission, execute_permission
+       函数功能：输出文件的读、写、执行权限信息，输入file_path，返回read_permission, write_permission, execute_permission
 
        函数参数：
         file_path:文件路径
@@ -107,9 +110,10 @@ def get_file_permissions(file_path):
 
     return file_read_permission, file_write_permission, file_execute_permission
 
+
 def get_file_signature_info(file_path):
     """
-       函数功能：输出文件的基本信息，输入file_path，返回file_is_signed
+       函数功能：获取文件的签名信息，输入file_path，返回file_is_signed
 
        函数参数：
         file_path:文件路径
@@ -159,7 +163,7 @@ def get_file_basic_information(file_path):
 
     # 整合所有信息
     file_basic_information = {
-        "file_name":file_name,
+        "file_name": file_name,
         "file_is_signed": file_is_signed,
         "file_read_permission": file_read_permission,
         "file_write_permission": file_write_permission,
@@ -167,7 +171,7 @@ def get_file_basic_information(file_path):
         "file_create_time": create_time_str,
         "file_modify_time": modify_time_str,
         "file_access_time": access_time_str,
-        "file_size": str(file_size)+" MB",
+        "file_size": str(file_size) + " MB",
         "md5_hash": md5_hash,
         "sha1_hash": sha1_hash,
         "sha256_hash": sha256_hash
@@ -176,11 +180,63 @@ def get_file_basic_information(file_path):
     return file_basic_information
 
 
+def get_file_string(file_path):
+    """
+       函数功能：输出文件的基本信息，输入file_path，返回file_string_information
+
+       函数参数：
+        file_path:文件路径
+
+       返回值：
+        file_string_information:文件中的字符串总信息，包含字符串数量、对应偏移和内容
+    """
+
+    # 编译规则文件
+    rules = yara.compile(filepath=r"get_file_string.yara")
+
+    # 从文件中读取数据
+    with open(file_path, 'rb') as f:
+        file_data = f.read()
+    # 匹配内存中的数据
+    matches = rules.match(data=file_data)
+
+    # 创建存储匹配到的字符串数量变量
+    file_string_count = 0
+
+    # 创建存储所有字符串信息的空列表
+    file_all_string = []
+
+    for match in matches:
+        # print(f"规则名称: {match.rule}")  # 打印匹配到的规则名称
+        for string in match.strings:
+            file_string_count = len(string.instances)
+            # print(string.instances)
+
+            # 遍历所有字符串
+            for data in string.instances:
+                # 将遍历到的字符串的偏移和内容存储到列表中
+                file_all_string.append(dict(string_offset=data.offset, string=str(data.matched_data[:-1])[2:-1]))
+                # print(string.instances[0].offset)
+                # print(string.instances[0].matched_data[:-1])
+
+    # 匹配到的字符串总信息
+    file_string_information = {
+        "file_string_count": file_string_count,
+        "file_all_string": file_all_string
+    }
+
+    return file_string_information
+
+
 if __name__ == "__main__":
     # 文件路径
-    file_path = r"C:\Windows\notepad.exe"
+    file_path = r"D:\常规软件\7-Zip\7z.exe"
 
     # 获取文件的基础信息
     file_basic_information = get_file_basic_information(file_path)
 
+    # 获取文件中的字符串信息
+    file_string_information = get_file_string(file_path)
+
     print(json.dumps(file_basic_information, indent=4))
+    print(file_string_information)
