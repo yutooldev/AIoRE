@@ -215,9 +215,11 @@ def get_file_string(file_path):
             # 遍历所有字符串
             for data in string.instances:
                 # 将遍历到的字符串的偏移和内容存储到列表中
-                file_all_string.append(dict(string_offset=data.offset, string=str(data.matched_data[:-1])[2:-1]))
+                file_all_string.append(dict(string_offset=data.offset+1, string=data.matched_data[1:-1].decode('utf-8')))
+                
                 # print(string.instances[0].offset)
                 # print(string.instances[0].matched_data[:-1])
+            # print(string.instances[1].matched_data[1:-1].decode('utf-8'))
 
     # 匹配到的字符串总信息
     file_string_information = {
@@ -230,7 +232,7 @@ def get_file_string(file_path):
 
 if __name__ == "__main__":
     # 文件路径
-    file_path = r"D:\常规软件\7-Zip\7z.exe"
+    file_path = r"D:\常规软件\WeChat\WeChat.exe"
 
     # 获取文件的基础信息
     file_basic_information = get_file_basic_information(file_path)
