@@ -2,11 +2,14 @@ import hashlib
 import os
 from pathlib import Path
 import time
-
+import json
+import stat
+import pefile
+import peutils
 
 def get_file_time(file_path):
     """
-       函数功能：输出文件的时间相关信息，输入file_path，返回create_time_str, modify_time_str
+       函数功能：输出文件的时间相关信息，输入file_path，返回create_time_str, modify_time_str, access_time_str, file_size
 
        函数参数：
         file_path:文件路径
@@ -78,14 +81,59 @@ def get_file_hash(file_path):
     # 返回十六进制的哈希值
     return md5_hash, sha1_hash, sha256_hash
 
+def get_file_permissions(file_path):
+    """
+       函数功能：输出文件的散列值，输入file_path，返回read_permission, write_permission, execute_permission
+
+       函数参数：
+        file_path:文件路径
+
+       返回值：
+        file_read_permission:读权限
+        file_write_permission:写权限
+        file_execute_permission:执行权限
+    """
+
+    # 获取文件的状态信息
+    file_stat = os.stat(file_path)
+
+    # 使用stat模块来提取权限
+    permissions = file_stat.st_mode
+
+    # 判断读、写、执行权限
+    file_read_permission = bool(permissions & stat.S_IRUSR)
+    file_write_permission = bool(permissions & stat.S_IWUSR)
+    file_execute_permission = bool(permissions & stat.S_IXUSR)
+
+    return file_read_permission, file_write_permission, file_execute_permission
+
+def get_file_signature_info(file_path):
+    """
+       函数功能：输出文件的基本信息，输入file_path，返回file_is_signed
+
+       函数参数：
+        file_path:文件路径
+
+       返回值：
+        file_is_signed:文件是否被签名
+    """
+    # 解析PE文件
+    pe = pefile.PE(file_path)
+
+    # 根据IMAGE_DIRECTORY_ENTRY_SECURITY的值判断文件是否被签名
+    file_is_signed = False
+    if pe.OPTIONAL_HEADER.DATA_DIRECTORY[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_SECURITY"]].VirtualAddress != 0:
+        file_is_signed = True
+
+    return file_is_signed
 
 
 def get_file_basic_information(file_path):
     """
-       函数功能：输出文件的基本信息，输入filePath，返回file_basic_information
+       函数功能：输出文件的基本信息，输入file_path，返回file_basic_information
 
        函数参数：
-        filePath:操作数
+        file_path:文件路径
 
        返回值：
         file_basic_information:文件的基础信息
@@ -103,9 +151,19 @@ def get_file_basic_information(file_path):
     # 获取文件的散列值
     md5_hash, sha1_hash, sha256_hash = get_file_hash(file_path)
 
+    # 获取文件的读、写、执行权限
+    file_read_permission, file_write_permission, file_execute_permission = get_file_permissions(file_path)
+
+    # 获取文件的签名信息（因多个python库提取签名信息时有问题，暂时只判断文件是否签名，后续手动实现该功能）
+    file_is_signed = get_file_signature_info(file_path)
+
     # 整合所有信息
     file_basic_information = {
         "file_name":file_name,
+        "file_is_signed": file_is_signed,
+        "file_read_permission": file_read_permission,
+        "file_write_permission": file_write_permission,
+        "file_execute_permission": file_execute_permission,
         "file_create_time": create_time_str,
         "file_modify_time": modify_time_str,
         "file_access_time": access_time_str,
@@ -120,9 +178,9 @@ def get_file_basic_information(file_path):
 
 if __name__ == "__main__":
     # 文件路径
-    file_path = r"C:\Windows\System32\notepad.exe"
+    file_path = r"C:\Windows\notepad.exe"
 
     # 获取文件的基础信息
     file_basic_information = get_file_basic_information(file_path)
 
-    print(file_basic_information)
+    print(json.dumps(file_basic_information, indent=4))
