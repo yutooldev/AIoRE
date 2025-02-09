@@ -10,7 +10,7 @@ import yara
 
 def get_file_time(file_path):
     """
-       函数功能：输出文件的时间相关信息，输入file_path，返回create_time_str, modify_time_str, access_time_str, file_size
+       函数功能：返回文件的时间相关信息，输入file_path，返回create_time_str, modify_time_str, access_time_str, file_size
 
        函数参数：
         file_path:文件路径
@@ -46,7 +46,7 @@ def get_file_time(file_path):
 
 def get_file_hash(file_path):
     """
-       函数功能：输出文件的散列值，输入file_path，返回md5_hash, sha1_hash, sha256_hash
+       函数功能：返回文件的散列值，输入file_path，返回md5_hash, sha1_hash, sha256_hash
 
        函数参数：
         file_path:文件路径
@@ -86,7 +86,7 @@ def get_file_hash(file_path):
 
 def get_file_permissions(file_path):
     """
-       函数功能：输出文件的读、写、执行权限信息，输入file_path，返回read_permission, write_permission, execute_permission
+       函数功能：返回文件的读、写、执行权限信息，输入file_path，返回read_permission, write_permission, execute_permission
 
        函数参数：
         file_path:文件路径
@@ -132,9 +132,80 @@ def get_file_signature_info(file_path):
     return file_is_signed
 
 
-def get_file_basic_information(file_path):
+def get_file_pe_sections_info(file_path):
     """
-       函数功能：输出文件的基本信息，输入file_path，返回file_basic_information
+       函数功能：返回文件的节区信息，输入file_path，返回file_pe_sections_info
+
+       函数参数：
+        file_path:文件路径
+
+       返回值：
+        file_pe_sections_info:文件的节区信息
+    """
+
+    # 加载PE文件
+    pe = pefile.PE(file_path)
+
+    # 获取节区数量
+    file_pe_sections_num = len(pe.sections)
+
+    # 创建存储文件节区信息的空列表
+    file_pe_sections = []
+
+    # 获取节区信息
+    for section in pe.sections:
+        # 获取节区的读、写、执行权限信息
+        # 创建存储读、写、执行权限信息的变量
+        section_permissions = ""
+        # 判断读权限
+        if section.Characteristics & 0x40000000 != 0:
+            section_permissions += 'R'
+        else:
+            section_permissions += '-'
+
+        # 判断写权限
+        if section.Characteristics & 0x80000000 != 0:
+            section_permissions += 'W'
+        else:
+            section_permissions += '-'
+
+        # 判断写权限
+        if section.Characteristics & 0x20000000 != 0:
+            section_permissions += 'E'
+        else:
+            section_permissions += '-'
+
+        # 将文件的节区信息存储到字典中
+        file_pe_sections.append(
+            dict(
+                # 节区名
+                section_name=section.Name.decode().strip().replace(chr(0), ''),
+                # 节区权限
+                section_permissions=section_permissions,
+                # 虚拟地址
+                virtual_address=hex(section.VirtualAddress),
+                # 虚拟大小
+                virtual_size=hex(section.Misc_VirtualSize),
+                # 物理地址
+                pointer_to_raw_data=hex(section.PointerToRawData),
+                # 物理大小
+                size_of_raw_data=hex(section.SizeOfRawData)
+
+            )
+        )
+
+    # 整合文件的节区信息
+    file_pe_sections_info = {
+        "file_pe_sections_num": file_pe_sections_num,
+        "file_pe_sections": file_pe_sections
+    }
+
+    return file_pe_sections_info
+
+
+def get_file_basic_info(file_path):
+    """
+       函数功能：返回文件的基本信息，输入file_path，返回file_basic_information
 
        函数参数：
         file_path:文件路径
@@ -182,13 +253,13 @@ def get_file_basic_information(file_path):
 
 def get_file_string(file_path):
     """
-       函数功能：输出文件的基本信息，输入file_path，返回file_string_information
+       函数功能：返回文件内的包含的字符串信息，输入file_path，返回file_string_info
 
        函数参数：
         file_path:文件路径
 
        返回值：
-        file_string_information:文件中的字符串总信息，包含字符串数量、对应偏移和内容
+        file_string_info:文件中的字符串总信息，包含字符串数量、对应偏移和内容
     """
 
     # 编译规则文件
@@ -215,19 +286,47 @@ def get_file_string(file_path):
             # 遍历所有字符串
             for data in string.instances:
                 # 将遍历到的字符串的偏移和内容存储到列表中
-                file_all_string.append(dict(string_offset=data.offset+1, string=data.matched_data[1:-1].decode('utf-8')))
-                
+                # 因yara规则是从可见字符串前的不可见字符串开始匹配的，所以偏移需要+1进行修正，且需要去除字符串两端的不可见字符
+                file_all_string.append(
+                    dict(
+                        string_offset=data.offset + 1,
+                        string=data.matched_data[1:-1].decode('utf-8')
+                    )
+                )
+
                 # print(string.instances[0].offset)
                 # print(string.instances[0].matched_data[:-1])
             # print(string.instances[1].matched_data[1:-1].decode('utf-8'))
 
     # 匹配到的字符串总信息
-    file_string_information = {
+    file_string_info = {
         "file_string_count": file_string_count,
         "file_all_string": file_all_string
     }
 
-    return file_string_information
+    return file_string_info
+
+
+def get_file_pe_info(file_path):
+    """
+       函数功能：返回文件的PE信息，输入file_path，返回file_pe_info
+
+       函数参数：
+        file_path:文件路径
+
+       返回值：
+        file_pe_info:文件的PE信息
+    """
+
+    # 获取文件的节区信息
+    file_sections_info = get_file_pe_sections_info(file_path)
+
+    # 整合所以PE信息
+    file_pe_info = {
+        "file_sections_info":file_sections_info
+    }
+
+    return file_pe_info
 
 
 if __name__ == "__main__":
@@ -235,10 +334,14 @@ if __name__ == "__main__":
     file_path = r"D:\常规软件\WeChat\WeChat.exe"
 
     # 获取文件的基础信息
-    file_basic_information = get_file_basic_information(file_path)
+    file_basic_info = get_file_basic_info(file_path)
 
     # 获取文件中的字符串信息
-    file_string_information = get_file_string(file_path)
+    file_string_info = get_file_string(file_path)
 
-    print(json.dumps(file_basic_information, indent=4))
-    print(file_string_information)
+    # 获取文件的PE信息
+    file_pe_info = get_file_pe_info(file_path)
+
+    print(json.dumps(file_basic_info, indent=4))
+    print(file_string_info)
+    print(json.dumps(file_pe_info, indent=4))
