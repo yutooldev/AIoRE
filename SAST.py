@@ -1,3 +1,4 @@
+import datetime
 import hashlib
 import os
 from pathlib import Path
@@ -132,6 +133,31 @@ def get_file_signature_info(file_path):
     return file_is_signed
 
 
+def get_file_pe_architecture(file_path):
+    """
+       函数功能：返回PE文件的位数，输入file_path，返回file_pe_architecture
+
+       函数参数：
+        file_path:文件路径
+
+       返回值：
+        file_pe_architecture:PE文件的位数
+    """
+
+    # 加载PE文件
+    pe = pefile.PE(file_path)
+
+    # 根据 Machine 值判断架构类型
+    if pe.FILE_HEADER.Machine == 0x14c:
+        file_pe_architecture = "32-bit"
+    elif pe.FILE_HEADER.Machine == 0x8664:
+        file_pe_architecture = "64-bit"
+    else:
+        file_pe_architecture = "Unknown architecture"
+
+    return file_pe_architecture
+
+
 def get_file_pe_sections_info(file_path):
     """
        函数功能：返回文件的节区信息，输入file_path，返回file_pe_sections_info
@@ -203,15 +229,50 @@ def get_file_pe_sections_info(file_path):
     return file_pe_sections_info
 
 
-def get_file_basic_info(file_path):
+def get_file_pe_version_info(file_path):
     """
-       函数功能：返回文件的基本信息，输入file_path，返回file_basic_information
+       函数功能：返回文件的版本信息，输入file_path，返回file_version_info
 
        函数参数：
         file_path:文件路径
 
        返回值：
-        file_basic_information:文件的基础信息
+        file_version_info:文件的基础信息
+    """
+
+    # 创建存储版本信息的字典
+    file_version_info = {
+        "FileVersion": "",
+        "ProductVersion": "",
+        "CompanyName": "",
+        "FileDescription": "",
+        "ProductName": "",
+        "LegalCopyright": "",
+    }
+
+    # 加载PE文件
+    pe = pefile.PE(file_path)
+
+    # 遍历文件信息
+    for fileinfo in pe.FileInfo:
+        for st in fileinfo[0].StringTable:
+            entries = st.entries.items()
+            for entry in entries:
+                key, value = entry
+                file_version_info[key.decode()] = value.decode()
+
+    return file_version_info
+
+
+def get_file_basic_info(file_path):
+    """
+       函数功能：返回文件的基本信息，输入file_path，返回file_basic_info
+
+       函数参数：
+        file_path:文件路径
+
+       返回值：
+        file_basic_info:文件的基础信息
     """
 
     # 获取文件名
@@ -233,7 +294,7 @@ def get_file_basic_info(file_path):
     file_is_signed = get_file_signature_info(file_path)
 
     # 整合所有信息
-    file_basic_information = {
+    file_basic_info = {
         "file_name": file_name,
         "file_is_signed": file_is_signed,
         "file_read_permission": file_read_permission,
@@ -248,7 +309,7 @@ def get_file_basic_info(file_path):
         "sha256_hash": sha256_hash
     }
 
-    return file_basic_information
+    return file_basic_info
 
 
 def get_file_string(file_path):
@@ -318,12 +379,60 @@ def get_file_pe_info(file_path):
         file_pe_info:文件的PE信息
     """
 
+    # 加载PE文件
+    pe = pefile.PE(file_path)
+
+    # 获取程序入口点地址
+    address_of_entry_point = pe.OPTIONAL_HEADER.AddressOfEntryPoint
+
+    # 获取基地址
+    image_base = pe.OPTIONAL_HEADER.ImageBase
+
+    # 计算实际入口点的虚拟地址
+    virtual_address_of_entry_point = image_base + address_of_entry_point
+
+    # 目标操作系统的主版本号
+    major_operating_system_version = pe.OPTIONAL_HEADER.MajorOperatingSystemVersion
+
+    # 获取文件子系统
+    # 定义 Subsystem 的常见值及其描述
+    subsystem_dict = {
+        0x1: "Native",
+        0x2: "Windows GUI",
+        0x3: "Windows CUI",
+        0x5: "OS2 CUI",
+        0x7: "POSIX CUI",
+        0x8: "Native Windows",
+        0x9: "Windows CE GUI",
+        0xa: "EFI Application"
+    }
+    # 获取SubSystem值，并进行判断
+    file_subsystem = subsystem_dict.get(pe.OPTIONAL_HEADER.Subsystem, "Unknown Subsystem")
+
+    # 获取PE文件的位数
+    file_pe_architecture = get_file_pe_architecture(file_path)
+
+    # 获取pe文件的版本信息
+    file_pe_version_info = get_file_pe_version_info(file_path)
+
     # 获取文件的节区信息
     file_sections_info = get_file_pe_sections_info(file_path)
 
+    # 获取时间戳（TimeDateStamp字段）
+    time_data_stamp = pe.FILE_HEADER.TimeDateStamp
+
     # 整合所以PE信息
     file_pe_info = {
-        "file_sections_info":file_sections_info
+        "time_data_stamp": datetime.datetime.utcfromtimestamp(time_data_stamp).strftime("%Y-%m-%d %H:%M:%S"),
+        "file_pe_version_info": file_pe_version_info,
+        "address_of_entry_point": hex(address_of_entry_point),
+        "image_base": hex(image_base),
+        "virtual_address_of_entry_point": hex(virtual_address_of_entry_point),
+        "file_subsystem": file_subsystem,
+        "major_operating_system_version": hex(major_operating_system_version),
+        "file_pe_architecture": file_pe_architecture,
+        "file_pe_version_info": file_pe_version_info,
+        "file_sections_info": file_sections_info
     }
 
     return file_pe_info
@@ -336,12 +445,14 @@ if __name__ == "__main__":
     # 获取文件的基础信息
     file_basic_info = get_file_basic_info(file_path)
 
-    # 获取文件中的字符串信息
-    file_string_info = get_file_string(file_path)
-
     # 获取文件的PE信息
     file_pe_info = get_file_pe_info(file_path)
 
+    # 获取文件中的字符串信息
+    file_string_info = get_file_string(file_path)
+
+
+
     print(json.dumps(file_basic_info, indent=4))
-    print(file_string_info)
     print(json.dumps(file_pe_info, indent=4))
+    print(file_string_info)
