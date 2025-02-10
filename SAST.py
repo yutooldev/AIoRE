@@ -195,7 +195,7 @@ def get_file_pe_sections_info(file_path):
         else:
             section_permissions += '-'
 
-        # 判断写权限
+        # 判断执行权限
         if section.Characteristics & 0x20000000 != 0:
             section_permissions += 'E'
         else:
@@ -431,7 +431,6 @@ def get_file_pe_info(file_path):
         "file_subsystem": file_subsystem,
         "major_operating_system_version": hex(major_operating_system_version),
         "file_pe_architecture": file_pe_architecture,
-        "file_pe_version_info": file_pe_version_info,
         "file_sections_info": file_sections_info
     }
 
@@ -450,8 +449,6 @@ if __name__ == "__main__":
 
     # 获取文件中的字符串信息
     file_string_info = get_file_string(file_path)
-
-
 
     print(json.dumps(file_basic_info, indent=4))
     print(json.dumps(file_pe_info, indent=4))
